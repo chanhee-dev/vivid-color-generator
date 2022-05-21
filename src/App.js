@@ -1,18 +1,20 @@
 import './App.css';
 import concepts from './concepts';
-import util from './utils';
-import { useEffect, useState } from 'react';
+import util, {quantization} from './utils';
+import { useEffect, useState, useRef } from 'react';
 import HSLDiv from './HSLDiv';
 import {TextField, Stack, Box, Button, Typography} from '@mui/material';
 import {Prism as SyntaxHighlighter} from 'react-syntax-highlighter';
 import {dracula} from 'react-syntax-highlighter/dist/esm/styles/prism';
 
 function App() {
+  const canvasRef = useRef();
   const [rgb, setRgb] = useState(util.randomRGBValue());
   const [colorSet, setColorSet] = useState({});
   const [hex, setHex] = useState('');
   const [hsl, setHsl] = useState('');
   const [hsv, setHsv] = useState('');
+  const [averageColor, setAverageColor] = useState([]);
 
   useEffect(() => {
     const converted = util.convertFromRgb(rgb[0], rgb[1], rgb[2]);
@@ -24,6 +26,34 @@ function App() {
   const handleClick = () => {
     setRgb(util.randomRGBValue());
   }
+
+  const handleFileUpload = (e) => {
+    const imageFile = e.target.files[0];
+    const image = new Image();
+    const fileReader = new FileReader();
+    // fileReader.readAsDataURL(imageFile);
+    fileReader.readAsDataURL(imageFile);
+    fileReader.onload = () => {
+      // image의 width / height 값을 가져오기 위하여 new Image 인스턴스 생성 및 src 지정
+      // fileReader로 읽었을 때 직접 width / height값을 가져올 수는 없는가?
+      image.src = fileReader.result;
+      image.onload = () => {
+        const ctx = canvasRef.current.getContext("2d");
+        // canvas의 width / height를 가져오기 위하여 ctx에 접근하고 있음
+        // canvasRef.current를 통하여 직접 제어할 수는 없는가?
+        ctx.canvas.width = image.width;
+        ctx.canvas.height = image.height;
+        // 일단 이미지를 그린 후에야 imageData를 가져올 수 있음
+        // 꼭 canvas에 이미지를 rendering시키는 과정이 필요한가?
+        ctx.drawImage(image, 0, 0);
+        const imageData = ctx.getImageData(0, 0, ctx.canvas.width, ctx.canvas.height);
+        const result = util.buildRgb(imageData.data);
+        const colors = quantization(result, 0);
+        setAverageColor(colors);
+      }
+      
+    }
+  };
 
   return (
     <>
@@ -76,14 +106,19 @@ function App() {
             {JSON.stringify(colorSet, null, 2)}
           </SyntaxHighlighter>
         </Box>
+        <Box sx={{display: 'flex', flexWrap: 'wrap' }}>
+          {
+            averageColor.map(item => {
+              const rgbColor = `rgb(${item.r}, ${item.g}, ${item.b})`;
+              return (
+                <Box sx={{width: '48px', height: '48px', backgroundColor: rgbColor}} />
+              )
+            })
+          }
+        </Box>
       </Stack>
-      <Box width="100%">
-        <Typography>스트롱(strong : 강한)</Typography>
-        <Typography>
-        비비드 톤에 중간 명도의 회색을 약간 섞은 색감으로 다소 탁하며 비비드 컬러보다 진하다 혹은 강하다는 느낌을 주는 컬러 톤이다. 비비드에 비해 다소 선명함이 낮고 탁한 느낌의 강한 원색이 주를 이루며 색감이 강하므로 선명하고 적극적이며 화려하다는 이미지를 갖는다.
-        </Typography>
-
-      </Box>
+      <canvas ref={canvasRef} id="file-upload" style={{backgroundColor: '#CCC'}} />
+      <input type="file" onChange={handleFileUpload} accept="image/*"/>
     </>
   );
 }
